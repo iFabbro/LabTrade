@@ -1,84 +1,130 @@
 import pandas as pd
 import numpy as np
-from typing import Dict, List
+from typing import Dict, List, Optional
+from src.risk.risk_manager import RiskManager
 
 class Backtester:
-    """
-    Motore di backtesting per simulare l'esecuzione di strategie di trading.
-    """
-    
-    def __init__(self, initial_capital=10000, commission=0.001, slippage=0.0005):
-        """
-        Args:
-            initial_capital: Capitale iniziale in USD
-            commission: Commissione per trade (0.1% = 0.001)
-            slippage: Slippage stimato (0.05% = 0.0005)
-        """
+    def __init__(self, initial_capital=10000, commission=0.001, slippage=0.0005, risk_manager: Optional[RiskManager] = None):
         self.initial_capital = initial_capital
         self.commission = commission
         self.slippage = slippage
+        self.risk_manager = risk_manager
         
     def run_backtest(self, df_signals: pd.DataFrame) -> Dict:
-        """
-        Esegue il backtest sui segnali di trading.
-        
-        Args:
-            df_signals: DataFrame con colonna 'signal' (1=BUY, -1=SELL, 0=HOLD)
-        
-        Returns:
-            Dizionario con risultati del backtest
-        """
+        if self.risk_manager:
+            df = self.risk_manager.prepare_data(df_signals)
+        else:
+            df = df_signals.copy()
+            
         capital = self.initial_capital
-        position = 0  # 0 = no position, 1 = long
-        entry_price = 0
+        position = 0
+        entry_price = 0.0
+        quantity = 0.0
+        stop_loss = 0.0
+        take_profit = 0.0
         
         trades = []
         equity_curve = []
         
-        for idx, row in df_signals.iterrows():
+        for idx, row in df.iterrows():
             current_price = row['close']
             signal = row['signal']
             
-            # Apri posizione LONG
+            # 1. Controlla Stop Loss e Take Profit se siamo in posizione
+            if position == 1:
+                low_price = row.get('low', current_price)
+                high_price = row.get('high', current_price)
+                
+                # Priorità allo Stop Loss (worst case scenario se entrambi vengono toccati)
+                if low_price <= stop_loss:
+                    exit_price = stop_loss * (1 - self.slippage)
+                    pnl = (exit_price - entry_price) * quantity
+                    commission_cost = (quantity * exit_price) * self.commission
+                    capital += (quantity * exit_price) - commission_cost
+                    
+                    trades.append({
+                        'date': row['timestamp'],
+                        'type': 'SELL_SL',
+                        'price': exit_price,
+                        'quantity': quantity,
+                        'pnl': pnl,
+                        'commission': commission_cost
+                    })
+                    position = 0
+                    quantity = 0
+                    
+                elif high_price >= take_profit:
+                    exit_price = take_profit * (1 - self.slippage)
+                    pnl = (exit_price - entry_price) * quantity
+                    commission_cost = (quantity * exit_price) * self.commission
+                    capital += (quantity * exit_price) - commission_cost
+                    
+                    trades.append({
+                        'date': row['timestamp'],
+                        'type': 'SELL_TP',
+                        'price': exit_price,
+                        'quantity': quantity,
+                        'pnl': pnl,
+                        'commission': commission_cost
+                    })
+                    position = 0
+                    quantity = 0
+
+            # 2. Esegui segnali di strategia se non siamo in posizione
             if signal == 1 and position == 0:
-                # Applica slippage (compri leggermente più alto)
                 entry_price = current_price * (1 + self.slippage)
-                # Calcola quantità acquistabile
-                quantity = capital / entry_price
-                # Applica commissione
-                commission_cost = capital * self.commission
-                capital -= commission_cost
-                position = 1
                 
-                trades.append({
-                    'date': row['timestamp'],
-                    'type': 'BUY',
-                    'price': entry_price,
-                    'quantity': quantity,
-                    'commission': commission_cost
-                })
+                if self.risk_manager:
+                    atr = row.get('atr', 0)
+                    quantity = self.risk_manager.calculate_position_size(capital, entry_price, atr)
+                    stop_loss = self.risk_manager.get_stop_loss(entry_price, atr)
+                    take_profit = self.risk_manager.get_take_profit(entry_price, atr)
+                    
+                    # Safety cap: non possiamo comprare più di quanto il capitale consente
+                    max_quantity = capital / entry_price
+                    if quantity > max_quantity:
+                        quantity = max_quantity
+                else:
+                    quantity = capital / entry_price
+                    stop_loss = 0
+                    take_profit = float('inf')
+                
+                cost = quantity * entry_price
+                commission_cost = cost * self.commission
+                
+                if cost + commission_cost <= capital and quantity > 0:
+                    capital -= (cost + commission_cost)
+                    position = 1
+                    
+                    trades.append({
+                        'date': row['timestamp'],
+                        'type': 'BUY',
+                        'price': entry_price,
+                        'quantity': quantity,
+                        'commission': commission_cost,
+                        'stop_loss': stop_loss,
+                        'take_profit': take_profit
+                    })
             
-            # Chiudi posizione LONG
+            # 3. Chiudi posizione su segnale di SELL della strategia (se ancora in posizione)
             elif signal == -1 and position == 1:
-                # Applica slippage (vendi leggermente più basso)
                 exit_price = current_price * (1 - self.slippage)
-                # Calcola profitto/perdita
                 pnl = (exit_price - entry_price) * quantity
-                # Applica commissione
                 commission_cost = (quantity * exit_price) * self.commission
-                capital += pnl - commission_cost
-                position = 0
+                capital += (quantity * exit_price) - commission_cost
                 
                 trades.append({
                     'date': row['timestamp'],
-                    'type': 'SELL',
+                    'type': 'SELL_SIGNAL',
                     'price': exit_price,
                     'quantity': quantity,
                     'pnl': pnl,
                     'commission': commission_cost
                 })
+                position = 0
+                quantity = 0
             
-            # Calcola equity corrente
+            # 4. Calcola equity corrente
             if position == 1:
                 equity = capital + (current_price * quantity)
             else:
@@ -97,14 +143,22 @@ class Backtester:
         final_capital = df_equity['equity'].iloc[-1] if len(df_equity) > 0 else self.initial_capital
         total_return = (final_capital - self.initial_capital) / self.initial_capital
         
-        # Calcola drawdown
         df_equity['peak'] = df_equity['equity'].cummax()
         df_equity['drawdown'] = (df_equity['peak'] - df_equity['equity']) / df_equity['peak']
         max_drawdown = df_equity['drawdown'].max()
         
+        # Calcola Sharpe Ratio (annualizzato, risk-free rate = 0)
+        if len(df_equity) > 1:
+            df_equity['returns'] = df_equity['equity'].pct_change()
+            mean_return = df_equity['returns'].mean()
+            std_return = df_equity['returns'].std()
+            sharpe_ratio = np.sqrt(252) * (mean_return / std_return) if std_return != 0 else 0.0
+        else:
+            sharpe_ratio = 0.0
+            
         # Calcola win rate
         if len(df_trades) > 0:
-            sell_trades = df_trades[df_trades['type'] == 'SELL']
+            sell_trades = df_trades[df_trades['type'].str.startswith('SELL')]
             if len(sell_trades) > 0:
                 winning_trades = len(sell_trades[sell_trades['pnl'] > 0])
                 win_rate = winning_trades / len(sell_trades)
@@ -120,7 +174,8 @@ class Backtester:
             'total_return_pct': total_return * 100,
             'max_drawdown': max_drawdown,
             'max_drawdown_pct': max_drawdown * 100,
-            'total_trades': len(df_trades[df_trades['type'] == 'SELL']) if len(df_trades) > 0 else 0,
+            'sharpe_ratio': sharpe_ratio,
+            'total_trades': len(df_trades[df_trades['type'].str.startswith('SELL')]) if len(df_trades) > 0 else 0,
             'win_rate': win_rate,
             'win_rate_pct': win_rate * 100,
             'equity_curve': df_equity,
