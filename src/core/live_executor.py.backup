@@ -1,0 +1,246 @@
+"""
+Live Strategy Executor
+Esegue strategia in loop continuo su Binance Testnet
+"""
+import time
+import logging
+from datetime import datetime, timedelta
+from typing import Optional, Dict
+from pathlib import Path
+
+from src.utils.binance_testnet import BinanceTestnetClient
+from src.utils.trade_logger import TradeLogger
+from src.strategies.sma_crossover import SMACrossoverStrategy
+from src.risk.risk_manager import RiskManager
+
+logger = logging.getLogger(__name__)
+
+
+class LiveExecutor:
+    """Esecutore live strategia"""
+    
+    def __init__(self, symbol: str = "BTCUSDT", timeframe: str = "1h", 
+                 hours: int = 24, dry_run: bool = True):
+        """
+        Inizializza esecutore live
+        
+        Args:
+            symbol: Simbolo trading
+            timeframe: Timeframe candele (1h, 4h, 1d)
+            hours: Ore di esecuzione
+            dry_run: Se True, non invia ordini reali
+        """
+        self.symbol = symbol
+        self.timeframe = timeframe
+        self.hours = hours
+        self.dry_run = dry_run
+        
+        # Inizializza componenti
+        self.client = BinanceTestnetClient()
+        self.logger = TradeLogger()
+        self.strategy = SMACrossoverStrategy(fast_period=25, slow_period=30)
+        self.risk_manager = RiskManager(
+            risk_per_trade=0.02,
+            atr_period=14,
+            atr_sl_multiplier=2.0,
+            rr_ratio=2.0
+        )
+        
+        # Stato posizione
+        self.position_open = False
+        self.position_side = None
+        self.entry_price = 0.0
+        self.stop_loss = 0.0
+        self.take_profit = 0.0
+        self.position_quantity = 0.0
+        
+        # Timing
+        self.start_time = None
+        self.last_candle_time = None
+        
+        logger.info(f"Live Executor inizializzato: {symbol} {timeframe}, {hours}h, Dry-run={dry_run}")
+    
+    def get_balance(self) -> float:
+        """Ottieni saldo account"""
+        if self.dry_run:
+            return 10000.0  # Saldo simulato
+        
+        balances = self.client.get_account_balance()
+        return balances.get("USDT", 0.0)
+    
+    def fetch_candle_data(self) -> Dict:
+        """
+        Scarica ultima candela
+        
+        Returns:
+            Dict con OHLCV
+        """
+        # Per ora usiamo dati simulati
+        # In produzione, usare WebSocket o REST API per ottenere candele reali
+        import random
+        
+        base_price = 50000.0
+        price = base_price + random.uniform(-1000, 1000)
+        
+        return {
+            "timestamp": datetime.utcnow(),
+            "open": price - random.uniform(0, 100),
+            "high": price + random.uniform(0, 200),
+            "low": price - random.uniform(0, 200),
+            "close": price,
+            "volume": random.uniform(100, 1000)
+        }
+    
+    def execute_strategy(self):
+        """Esegui un ciclo della strategia"""
+        # Scarica candela
+        candle = self.fetch_candle_data()
+        current_price = candle["close"]
+        
+        # Aggiungi prezzo a strategia e risk manager
+        self.strategy.add_price(current_price)
+        self.risk_manager.add_candle(candle["high"], candle["low"], candle["close"])
+        
+        # Controlla posizione aperta
+        if self.position_open:
+            self._check_position(current_price)
+        else:
+            # Genera segnale
+            signal = self.strategy.generate_signal()
+            
+            if signal == "BUY":
+                self._open_position("LONG", current_price)
+            elif signal == "SELL":
+                self._open_position("SHORT", current_price)
+    
+    def _open_position(self, side: str, price: float):
+        """Apri posizione"""
+        balance = self.get_balance()
+        
+        # Calcola stop loss e take profit
+        self.risk_manager.add_candle(price, price, price)  # Aggiungi candela dummy per ATR
+        stop_loss = self.risk_manager.calculate_stop_loss(price, side)
+        take_profit = self.risk_manager.calculate_take_profit(price, stop_loss, side)
+        
+        # Calcola position size
+        quantity = self.risk_manager.calculate_position_size(balance, price, stop_loss)
+        
+        if self.dry_run:
+            logger.info(f"[DRY-RUN] Apertura posizione {side}: {quantity:.4f} {self.symbol} @ {price:.2f}")
+            order_result = {"orderId": "DRY_RUN", "status": "FILLED"}
+        else:
+            # Invia ordine reale
+            order_result = self.client.place_order(self.symbol, "BUY" if side == "LONG" else "SELL", "MARKET", quantity)
+            logger.info(f"Ordine inviato: {order_result}")
+        
+        # Aggiorna stato
+        self.position_open = True
+        self.position_side = side
+        self.entry_price = price
+        self.stop_loss = stop_loss
+        self.take_profit = take_profit
+        self.position_quantity = quantity
+        
+        # Logga trade
+        self.logger.log_trade(
+            symbol=self.symbol,
+            action=f"OPEN_{side}",
+            side="BUY" if side == "LONG" else "SELL",
+            price=price,
+            quantity=quantity,
+            balance=balance,
+            notes=f"SL={stop_loss:.2f}, TP={take_profit:.2f}"
+        )
+    
+    def _check_position(self, current_price: float):
+        """Controlla posizione aperta"""
+        # Controlla SL/TP
+        triggered, reason = self.risk_manager.check_stop_loss_take_profit(
+            self.position_side,
+            self.entry_price,
+            self.stop_loss,
+            self.take_profit,
+            current_price
+        )
+        
+        if triggered:
+            self._close_position(current_price, reason)
+    
+    def _close_position(self, current_price: float, reason: str):
+        """Chiudi posizione"""
+        # Calcola PnL
+        pnl = self.risk_manager.calculate_pnl(
+            self.entry_price,
+            current_price,
+            self.position_quantity,
+            self.position_side
+        )
+        
+        balance = self.get_balance()
+        
+        if self.dry_run:
+            logger.info(f"[DRY-RUN] Chiusura posizione {self.position_side}: PnL=${pnl:.2f} ({reason})")
+            order_result = {"orderId": "DRY_RUN", "status": "FILLED"}
+        else:
+            # Chiudi posizione reale
+            close_side = "SELL" if self.position_side == "LONG" else "BUY"
+            order_result = self.client.close_position(self.symbol, close_side, self.position_quantity)
+            logger.info(f"Posizione chiusa: {order_result}")
+        
+        # Logga trade
+        self.logger.log_trade(
+            symbol=self.symbol,
+            action=f"CLOSE_{self.position_side}",
+            side="SELL" if self.position_side == "LONG" else "BUY",
+            price=current_price,
+            quantity=self.position_quantity,
+            pnl=pnl,
+            balance=balance + pnl,
+            notes=f"{reason} triggered"
+        )
+        
+        # Reset stato
+        self.position_open = False
+        self.position_side = None
+        self.entry_price = 0.0
+        self.stop_loss = 0.0
+        self.take_profit = 0.0
+        self.position_quantity = 0.0
+    
+    def run(self):
+        """Esegui loop principale"""
+        logger.info(f"🚀 Avvio Live Executor per {self.hours} ore")
+        
+        self.start_time = datetime.utcnow()
+        end_time = self.start_time + timedelta(hours=self.hours)
+        
+        # Intervallo tra cicli (per timeframe 1h = 3600 secondi)
+        interval = 3600 if self.timeframe == "1h" else 14400 if self.timeframe == "4h" else 86400
+        
+        try:
+            while datetime.utcnow() < end_time:
+                self.execute_strategy()
+                
+                # Attendi prossimo ciclo
+                logger.info(f"⏳ Attendo {interval}s per prossima candela...")
+                time.sleep(interval)
+        
+        except KeyboardInterrupt:
+            logger.info("⚠️  Interruzione manuale rilevata")
+            self._graceful_shutdown()
+        
+        finally:
+            self._print_summary()
+    
+    def _graceful_shutdown(self):
+        """Shutdown graceful - chiudi posizioni aperte"""
+        if self.position_open:
+            logger.info("🔄 Chiusura posizione aperta prima dello shutdown...")
+            current_price = self.fetch_candle_data()["close"]
+            self._close_position(current_price, "MANUAL_SHUTDOWN")
+    
+    def _print_summary(self):
+        """Stampa summary finale"""
+        duration = datetime.utcnow() - self.start_time
+        logger.info(f"✅ Esecuzione completata in {duration}")
+        self.logger.print_summary()

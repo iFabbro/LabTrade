@@ -35,8 +35,8 @@ class Backtester:
                 low_price = row.get('low', current_price)
                 high_price = row.get('high', current_price)
                 
-                # Priorità allo Stop Loss (worst case scenario se entrambi vengono toccati)
-                if low_price <= stop_loss:
+                # Controlla Stop Loss (solo se è stato impostato)
+                if stop_loss > 0 and low_price <= stop_loss:
                     exit_price = stop_loss * (1 - self.slippage)
                     pnl = (exit_price - entry_price) * quantity
                     commission_cost = (quantity * exit_price) * self.commission
@@ -53,7 +53,8 @@ class Backtester:
                     position = 0
                     quantity = 0
                     
-                elif high_price >= take_profit:
+                # Controlla Take Profit (solo se è stato impostato)
+                elif take_profit < float('inf') and high_price >= take_profit:
                     exit_price = take_profit * (1 - self.slippage)
                     pnl = (exit_price - entry_price) * quantity
                     commission_cost = (quantity * exit_price) * self.commission
@@ -76,18 +77,25 @@ class Backtester:
                 
                 if self.risk_manager:
                     atr = row.get('atr', 0)
-                    quantity = self.risk_manager.calculate_position_size(capital, entry_price, atr)
-                    stop_loss = self.risk_manager.get_stop_loss(entry_price, atr)
-                    take_profit = self.risk_manager.get_take_profit(entry_price, atr)
                     
-                    # Safety cap: non possiamo comprare più di quanto il capitale consente
-                    max_quantity = capital / entry_price
+                    # Calcola stop loss prima
+                    stop_loss = self.risk_manager.get_stop_loss(entry_price, atr)
+                    
+                    # Poi calcola take profit usando lo stop loss
+                    take_profit = self.risk_manager.get_take_profit(entry_price, stop_loss)
+                    
+                    # Infine calcola position size
+                    quantity = self.risk_manager.calculate_position_size(capital, entry_price, stop_loss)
+                    
+                    # Safety cap: non possiamo comprare più di quanto il capitale consente (considerando commissione)
+                    max_quantity = (capital / (1 + self.commission)) / entry_price
                     if quantity > max_quantity:
                         quantity = max_quantity
                 else:
-                    quantity = capital / entry_price
-                    stop_loss = 0
-                    take_profit = float('inf')
+                    # Senza risk manager: usa tutto il capitale considerando la commissione
+                    quantity = (capital / (1 + self.commission)) / entry_price
+                    stop_loss = 0  # 0 significa "non controllare"
+                    take_profit = float('inf')  # inf significa "non controllare"
                 
                 cost = quantity * entry_price
                 commission_cost = cost * self.commission

@@ -1,14 +1,22 @@
-import sys
-import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-from src.utils.binance_client import binance_client
+"""
+Test SMA Crossover Strategy
+"""
+import pytest
+import pandas as pd
 from src.strategies.sma_crossover import SMACrossoverStrategy
+from src.utils.binance_client import BinanceDataClient
+
+
+@pytest.fixture
+def binance_client():
+    return BinanceDataClient()
+
 
 def test_sma_crossover_strategy():
     """Testa la strategia SMA Crossover su dati reali di Bitcoin"""
     # Scarica 100 giorni di dati (necessari per SMA a 50 periodi)
-    df = binance_client.get_historical_klines(
+    client = BinanceDataClient()
+    df = client.get_historical_klines(
         symbol='BTCUSDT',
         interval='1d',
         start_str='1 Jan 2023',
@@ -34,18 +42,22 @@ def test_sma_crossover_strategy():
     assert df_signals['signal'].isin([-1, 0, 1]).all(), "Valori signal non validi"
     
     # Ottieni i punti di crossover
-    buy_signals, sell_signals = strategy.get_crossover_points(df_signals)
+    buy_indices, sell_indices = strategy.get_crossover_points(df_signals)
     
     print(f"\n✓ Strategia: {strategy.name}")
     print(f"✓ Dati analizzati: {len(df_signals)} giorni")
-    print(f"✓ Segnali BUY generati: {len(buy_signals)}")
-    print(f"✓ Segnali SELL generati: {len(sell_signals)}")
+    print(f"✓ Segnali BUY generati: {len(buy_indices)}")
+    print(f"✓ Segnali SELL generati: {len(sell_indices)}")
     
-    if len(buy_signals) > 0:
-        print(f"✓ Primo BUY: {buy_signals.iloc[0]['timestamp'].strftime('%Y-%m-%d')} a ${buy_signals.iloc[0]['close']:,.2f}")
+    if len(buy_indices) > 0:
+        first_buy_idx = buy_indices[0]
+        first_buy_row = df_signals.iloc[first_buy_idx]
+        print(f"✓ Primo BUY: {first_buy_row['timestamp'].strftime('%Y-%m-%d')} a ${first_buy_row['close']:,.2f}")
     
-    if len(sell_signals) > 0:
-        print(f"✓ Primo SELL: {sell_signals.iloc[0]['timestamp'].strftime('%Y-%m-%d')} a ${sell_signals.iloc[0]['close']:,.2f}")
+    if len(sell_indices) > 0:
+        first_sell_idx = sell_indices[0]
+        first_sell_row = df_signals.iloc[first_sell_idx]
+        print(f"✓ Primo SELL: {first_sell_row['timestamp'].strftime('%Y-%m-%d')} a ${first_sell_row['close']:,.2f}")
     
-    # Verifica che ci sia almeno un segnale (dopo 100 giorni dovrebbe esserci)
-    assert len(buy_signals) + len(sell_signals) > 0, "Nessun segnale di crossover generato"
+    # Verifica che ci siano almeno alcuni segnali
+    assert len(buy_indices) > 0 or len(sell_indices) > 0, "La strategia non ha generato nessun segnale"

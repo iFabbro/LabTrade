@@ -1,0 +1,98 @@
+2026-06-12 09:38:20,116 - __main__ - INFO - ============================================================
+2026-06-12 09:38:20,116 - __main__ - INFO - 🚀 LABTRADE - PAPER TRADING SYSTEM
+2026-06-12 09:38:20,116 - __main__ - INFO - ============================================================
+2026-06-12 09:38:20,117 - __main__ - INFO - Symbol: BTCUSDT
+2026-06-12 09:38:20,117 - __main__ - INFO - Timeframe: 1h
+2026-06-12 09:38:20,117 - __main__ - INFO - Duration: 24 hours
+2026-06-12 09:38:20,117 - __main__ - INFO - Mode: LIVE (Testnet)
+2026-06-12 09:38:20,117 - __main__ - INFO - ============================================================
+2026-06-12 09:38:20,117 - src.strategies.sma_crossover - INFO - Strategia SMA inizializzata: Fast=25, Slow=30
+2026-06-12 09:38:20,117 - src.risk.risk_manager - INFO - Risk Manager inizializzato: Risk=2.0%, ATR=14, SL=2.0x, RR=2.0
+2026-06-12 09:38:20,118 - src.core.live_executor - INFO - Live Executor inizializzato: BTCUSDT 1h, 24h, Dry-run=False
+2026-06-12 09:38:20,118 - src.core.live_executor - INFO - 🚀 Avvio Live Executor per 24 ore
+2026-06-12 09:38:20,118 - src.core.live_executor - INFO - 🔄 Inizializzazione buffer candele...
+2026-06-12 09:38:20,119 - src.core.live_executor - INFO - 📥 Download 50 candele storiche...
+2026-06-12 09:38:20,643 - src.core.live_executor - INFO - ✓ Scaricate 50 candele
+2026-06-12 09:38:20,643 - src.core.live_executor - INFO - ✓ Buffer inizializzato con 50 candele
+2026-06-12 09:38:20,999 - src.core.live_executor - INFO - 📊 Prezzo corrente: $63019.80
+2026-06-12 09:38:21,516 - src.core.live_executor - INFO - 📈 SMA25: $63205.26, SMA30: $63097.60, ATR: $348.30
+2026-06-12 09:38:21,517 - src.core.live_executor - INFO - ⚪ Nessun segnale di ingresso
+2026-06-12 09:38:21,517 - src.core.live_executor - INFO - ⏳ Attendo 3600s per prossima candela...
+2026-06-12 10:38:21,848 - src.core.live_executor - INFO - 📊 Prezzo corrente: $63410.70
+2026-06-12 10:38:21,856 - src.core.live_executor - INFO - 📈 SMA25: $63233.57, SMA30: $63140.82, ATR: $362.15
+2026-06-12 10:38:21,856 - src.core.live_executor - INFO - ⚪ Nessun segnale di ingresso
+2026-06-12 10:38:21,856 - src.core.live_executor - INFO - ⏳ Attendo 3600s per prossima candela...
+2026-06-12 10:39:38,712 - src.core.live_executor - INFO - ⚠️  Interruzione manuale rilevata
+2026-06-12 10:39:38,712 - src.core.live_executor - INFO - ✅ Esecuzione completata in 1:01:18.594225
+2026-06-12 10:39:38,712 - __main__ - ERROR - ❌ Errore fatale: 'winning_trades'
+Traceback (most recent call last):
+  File "/Users/jumpman/Desktop/LabTrade/scripts/run_paper_trading.py", line 62, in main
+    executor.run()
+    ~~~~~~~~~~~~^^
+  File "/Users/jumpman/Desktop/LabTrade/src/core/live_executor.py", line 373, in run
+    self._print_summary()
+    ~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jumpman/Desktop/LabTrade/src/core/live_executor.py", line 387, in _print_summary
+    self.logger.print_summary()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jumpman/Desktop/LabTrade/src/utils/trade_logger.py", line 135, in print_summary
+    print(f"Trade Vincenti: {stats['winning_trades']}")
+                             ~~~~~^^^^^^^^^^^^^^^^^^
+KeyError: 'winning_trades'
+2026-06-12 10:54:43,009 - __main__ - INFO - ============================================================
+2026-06-12 10:54:43,009 - __main__ - INFO - 🚀 LABTRADE - PAPER TRADING SYSTEM
+2026-06-12 10:54:43,009 - __main__ - INFO - ============================================================
+2026-06-12 10:54:43,009 - __main__ - INFO - Symbol: BTCUSDT
+2026-06-12 10:54:43,009 - __main__ - INFO - Timeframe: 1h
+2026-06-12 10:54:43,009 - __main__ - INFO - Duration: 24 hours
+2026-06-12 10:54:43,009 - __main__ - INFO - Mode: LIVE (Testnet)
+2026-06-12 10:54:43,009 - __main__ - INFO - ============================================================
+2026-06-12 10:54:43,010 - src.strategies.sma_crossover - INFO - Strategia SMA inizializzata: Fast=25, Slow=30
+2026-06-12 10:54:43,012 - src.risk.risk_manager - INFO - Risk Manager inizializzato: Risk=2.0%, ATR=14, SL=2.0x, RR=2.0
+2026-06-12 10:54:43,013 - src.core.live_executor - INFO - Live Executor inizializzato: BTCUSDT 1h, 24h, Dry-run=False
+2026-06-12 10:54:43,013 - src.core.live_executor - INFO - 🚀 Avvio Live Executor per 24 ore
+2026-06-12 10:54:43,014 - src.core.live_executor - INFO - 🔄 Inizializzazione buffer candele...
+2026-06-12 10:54:43,014 - src.core.live_executor - INFO - 📥 Download 50 candele storiche...
+2026-06-12 10:54:43,512 - src.core.live_executor - INFO - ✓ Scaricate 50 candele
+2026-06-12 10:54:43,512 - src.core.live_executor - INFO - ✓ Buffer inizializzato con 50 candele
+2026-06-12 10:54:43,794 - src.core.live_executor - INFO - 📊 Prezzo corrente: $63419.50
+2026-06-12 10:54:44,232 - src.core.live_executor - INFO - 📈 SMA25: $63235.62, SMA30: $63142.53, ATR: $364.45
+2026-06-12 10:54:44,232 - src.core.live_executor - INFO - ⚪ Nessun segnale di ingresso
+2026-06-12 10:54:44,232 - src.core.live_executor - INFO - ⏳ Attendo 3600s per prossima candela...
+2026-06-12 10:57:44,300 - src.core.live_executor - INFO - ⚠️  Interruzione manuale rilevata
+2026-06-12 10:57:44,300 - src.core.live_executor - INFO - ✅ Esecuzione completata in 0:03:01.287143
+2026-06-12 10:57:44,301 - __main__ - ERROR - ❌ Errore fatale: 'winning_trades'
+Traceback (most recent call last):
+  File "/Users/jumpman/Desktop/LabTrade/scripts/run_paper_trading.py", line 62, in main
+    executor.run()
+    ~~~~~~~~~~~~^^
+  File "/Users/jumpman/Desktop/LabTrade/src/core/live_executor.py", line 373, in run
+    self._print_summary()
+    ~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jumpman/Desktop/LabTrade/src/core/live_executor.py", line 387, in _print_summary
+    self.logger.print_summary()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/jumpman/Desktop/LabTrade/src/utils/trade_logger.py", line 135, in print_summary
+    print(f"Trade Vincenti: {stats['winning_trades']}")
+                             ~~~~~^^^^^^^^^^^^^^^^^^
+KeyError: 'winning_trades'
+2026-06-12 10:58:46,079 - __main__ - INFO - ============================================================
+2026-06-12 10:58:46,080 - __main__ - INFO - 🚀 LABTRADE - PAPER TRADING SYSTEM
+2026-06-12 10:58:46,080 - __main__ - INFO - ============================================================
+2026-06-12 10:58:46,080 - __main__ - INFO - Symbol: BTCUSDT
+2026-06-12 10:58:46,080 - __main__ - INFO - Timeframe: 1h
+2026-06-12 10:58:46,080 - __main__ - INFO - Duration: 24 hours
+2026-06-12 10:58:46,080 - __main__ - INFO - Mode: LIVE (Testnet)
+2026-06-12 10:58:46,080 - __main__ - INFO - ============================================================
+2026-06-12 10:58:46,081 - src.strategies.sma_crossover - INFO - Strategia SMA inizializzata: Fast=25, Slow=30
+2026-06-12 10:58:46,081 - src.risk.risk_manager - INFO - Risk Manager inizializzato: Risk=2.0%, ATR=14, SL=2.0x, RR=2.0
+2026-06-12 10:58:46,081 - src.core.live_executor - INFO - Live Executor inizializzato: BTCUSDT 1h, 24h, Dry-run=False
+2026-06-12 10:58:46,081 - src.core.live_executor - INFO - 🚀 Avvio Live Executor per 24 ore
+2026-06-12 10:58:46,082 - src.core.live_executor - INFO - 🔄 Inizializzazione buffer candele...
+2026-06-12 10:58:46,082 - src.core.live_executor - INFO - 📥 Download 50 candele storiche...
+2026-06-12 10:58:46,578 - src.core.live_executor - INFO - ✓ Scaricate 50 candele
+2026-06-12 10:58:46,578 - src.core.live_executor - INFO - ✓ Buffer inizializzato con 50 candele
+2026-06-12 10:58:46,926 - src.core.live_executor - INFO - 📊 Prezzo corrente: $63449.00
+2026-06-12 10:58:47,540 - src.core.live_executor - INFO - 📈 SMA25: $63236.80, SMA30: $63143.52, ATR: $364.45
+2026-06-12 10:58:47,540 - src.core.live_executor - INFO - ⚪ Nessun segnale di ingresso
+2026-06-12 10:58:47,540 - src.core.live_executor - INFO - ⏳ Attendo 3600s per prossima candela...

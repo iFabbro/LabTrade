@@ -1,61 +1,169 @@
+"""
+SMA Crossover Strategy
+Strategia basata su incrocio SMA 25/30
+"""
+import numpy as np
 import pandas as pd
-import pandas_ta as ta
+from typing import Tuple, List
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 class SMACrossoverStrategy:
-    """
-    Strategia basata sul crossover di Medie Mobili Semplici (SMA).
+    """Strategia SMA Crossover"""
     
-    Regole:
-    - BUY: Quando SMA veloce incrocia al rialzo SMA lenta
-    - SELL: Quando SMA veloce incrocia al ribasso SMA lenta
-    """
-    
-    def __init__(self, fast_period=20, slow_period=50):
-        self.fast_period = fast_period
-        self.slow_period = slow_period
-        self.name = f"SMA_Crossover_{fast_period}_{slow_period}"
-    
-    def generate_signals(self, df):
+    def __init__(self, fast_period: int = 25, slow_period: int = 30):
         """
-        Genera segnali di trading basati sul crossover SMA.
+        Inizializza strategia
         
         Args:
-            df: DataFrame con colonne ['timestamp', 'open', 'high', 'low', 'close', 'volume']
+            fast_period: Periodo SMA veloce (default 25)
+            slow_period: Periodo SMA lento (default 30)
+        """
+        self.fast_period = fast_period
+        self.slow_period = slow_period
+        self.prices: List[float] = []
+        self.name = f"SMA_Crossover_{fast_period}_{slow_period}"
+        
+        logger.info(f"Strategia SMA inizializzata: Fast={fast_period}, Slow={slow_period}")
+    
+    def add_price(self, price: float):
+        """
+        Aggiungi prezzo al buffer
+        
+        Args:
+            price: Prezzo attuale
+        """
+        self.prices.append(price)
+        
+        # Mantieni solo ultimi 100 prezzi per efficienza
+        if len(self.prices) > 100:
+            self.prices = self.prices[-100:]
+    
+    def calculate_sma(self, period: int) -> float:
+        """
+        Calcola Simple Moving Average
+        
+        Args:
+            period: Periodo SMA
+            
+        Returns:
+            Valore SMA
+        """
+        if len(self.prices) < period:
+            return 0.0
+        
+        return np.mean(self.prices[-period:])
+    
+    def generate_signal(self) -> str:
+        """
+        Genera segnale di trading (per uso live)
         
         Returns:
-            DataFrame con colonna aggiuntiva 'signal' (1=BUY, -1=SELL, 0=HOLD)
+            BUY, SELL, o HOLD
         """
-        # Crea una copia per non modificare l'originale
-        df_signals = df.copy()
+        if len(self.prices) < self.slow_period:
+            logger.debug(f"Buffer insufficiente: {len(self.prices)}/{self.slow_period}")
+            return "HOLD"
         
-        # Calcola le SMA usando pandas_ta
-        df_signals['sma_fast'] = ta.sma(df_signals['close'], length=self.fast_period)
-        df_signals['sma_slow'] = ta.sma(df_signals['close'], length=self.slow_period)
+        sma_fast = self.calculate_sma(self.fast_period)
+        sma_slow = self.calculate_sma(self.slow_period)
         
-        # Rimuovi i NaN iniziali (dove le SMA non sono ancora calcolate)
-        df_signals = df_signals.dropna()
+        # Calcola SMA precedenti per rilevare incrocio
+        prices_prev = self.prices[:-1]
+        if len(prices_prev) < self.slow_period:
+            return "HOLD"
+        
+        sma_fast_prev = np.mean(prices_prev[-self.fast_period:])
+        sma_slow_prev = np.mean(prices_prev[-self.slow_period:])
+        
+        # Golden Cross: SMA veloce attraversa sopra SMA lenta
+        if sma_fast_prev <= sma_slow_prev and sma_fast > sma_slow:
+            logger.info(f"🟢 GOLDEN CROSS: SMA{self.fast_period}={sma_fast:.2f} > SMA{self.slow_period}={sma_slow:.2f}")
+            return "BUY"
+        
+        # Death Cross: SMA veloce attraversa sotto SMA lenta
+        elif sma_fast_prev >= sma_slow_prev and sma_fast < sma_slow:
+            logger.info(f"🔴 DEATH CROSS: SMA{self.fast_period}={sma_fast:.2f} < SMA{self.slow_period}={sma_slow:.2f}")
+            return "SELL"
+        
+        return "HOLD"
+    
+    def generate_signals(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Genera segnali per backtest su DataFrame
+        
+        Args:
+            df: DataFrame con colonne 'close'
+            
+        Returns:
+            DataFrame con colonne aggiuntive: sma_fast, sma_slow, signal, position
+        """
+        df = df.copy()
+        
+        # Calcola SMA
+        df['sma_fast'] = df['close'].rolling(window=self.fast_period).mean()
+        df['sma_slow'] = df['close'].rolling(window=self.slow_period).mean()
         
         # Genera segnali
-        # 1 = BUY (SMA veloce > SMA lenta)
-        # -1 = SELL (SMA veloce < SMA lenta)
-        # 0 = HOLD (nessun cambiamento)
-        df_signals['signal'] = 0
-        df_signals.loc[df_signals['sma_fast'] > df_signals['sma_slow'], 'signal'] = 1
-        df_signals.loc[df_signals['sma_fast'] < df_signals['sma_slow'], 'signal'] = -1
+        # 1 = BUY (Golden Cross), -1 = SELL (Death Cross), 0 = HOLD
+        df['signal'] = 0
         
-        # Identifica i crossover (cambiamenti di segnale)
-        df_signals['position'] = df_signals['signal'].diff()
+        for i in range(1, len(df)):
+            if pd.isna(df['sma_fast'].iloc[i]) or pd.isna(df['sma_slow'].iloc[i]):
+                continue
+            
+            sma_fast_prev = df['sma_fast'].iloc[i-1]
+            sma_slow_prev = df['sma_slow'].iloc[i-1]
+            sma_fast_curr = df['sma_fast'].iloc[i]
+            sma_slow_curr = df['sma_slow'].iloc[i]
+            
+            # Golden Cross
+            if sma_fast_prev <= sma_slow_prev and sma_fast_curr > sma_slow_curr:
+                df.loc[df.index[i], 'signal'] = 1
+            # Death Cross
+            elif sma_fast_prev >= sma_slow_prev and sma_fast_curr < sma_slow_curr:
+                df.loc[df.index[i], 'signal'] = -1
         
-        return df_signals
+        # Aggiungi colonna position (1 se in posizione long, 0 se flat, -1 se short)
+        # Per ora implementiamo solo long positions
+        df['position'] = 0
+        in_position = False
+        
+        for i in range(len(df)):
+            if df['signal'].iloc[i] == 1:  # BUY signal
+                in_position = True
+            elif df['signal'].iloc[i] == -1:  # SELL signal
+                in_position = False
+            
+            df.loc[df.index[i], 'position'] = 1 if in_position else 0
+        
+        return df
     
-    def get_crossover_points(self, df_signals):
+    def get_crossover_points(self, df: pd.DataFrame) -> Tuple[List[int], List[int]]:
         """
-        Estrae i punti esatti di crossover (entry/exit).
+        Ottieni punti di incrocio per visualizzazione
+        
+        Args:
+            df: DataFrame con segnali
+            
+        Returns:
+            Tuple (buy_indices, sell_indices)
+        """
+        buy_indices = df[df['signal'] == 1].index.tolist()
+        sell_indices = df[df['signal'] == -1].index.tolist()
+        return buy_indices, sell_indices
+    
+    def get_indicators(self) -> dict:
+        """
+        Ottieni valori indicatori attuali
         
         Returns:
-            Tuple di (buy_signals, sell_signals) come DataFrame
+            Dict con SMA25, SMA30
         """
-        buy_signals = df_signals[df_signals['position'] == 2].copy()  # Da -1 a 1
-        sell_signals = df_signals[df_signals['position'] == -2].copy()  # Da 1 a -1
-        
-        return buy_signals, sell_signals
+        return {
+            "sma_fast": self.calculate_sma(self.fast_period),
+            "sma_slow": self.calculate_sma(self.slow_period),
+            "prices_count": len(self.prices)
+        }
