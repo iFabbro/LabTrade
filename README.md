@@ -42,3 +42,5 @@ Software a scopo educativo. Testare sempre in Paper Trading.
 | **Trade Totali** | 116 | ~19 trade/mese (no overtrading) |
 
 *Nota: I risultati sono ottenuti con leva massima 1x e rischio fisso del 2% per trade.*
+
+> 💡 **Nota sulla Robustezza**: I parametri attuali (SMA 25/30, ADX ≥ 25, Volume > 1.2x) sono stati selezionati tramite **Grid Search** su 16 combinazioni diverse, risultando la configurazione con il miglior compromesso tra Win Rate (51.7%) e Max Drawdown (3.84%), evitando l'overfitting.
