@@ -28,3 +28,14 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
+
+# LabTrade - Dati runtime e sensibili (NON caricare su GitHub)
+logs/
+state/
+*.csv
+*.log
+.env
+.env.local
+*.key
+*.pem
+credentials.json

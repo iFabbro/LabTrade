@@ -4,6 +4,7 @@ Gestisce connessione e operazioni su Binance Testnet
 """
 import os
 import time
+from collections import deque
 import hmac
 import hashlib
 import requests
@@ -38,6 +39,12 @@ class BinanceTestnetClient:
             "X-MBX-APIKEY": self.api_key or ""
         })
         
+        # Rate limiting: max 10 richieste/secondo
+        self.request_times = deque(maxlen=10)
+        
+        # Rate limiting: max 10 richieste/secondo
+        self.request_times = deque(maxlen=10)
+        
     def _generate_signature(self, query_string: str) -> str:
         """Genera firma HMAC SHA256"""
         return hmac.new(
@@ -59,6 +66,28 @@ class BinanceTestnetClient:
         Returns:
             Response JSON
         """
+        # Rate limiting: aspetta se necessario
+        current_time = time.time()
+        if len(self.request_times) == 10:
+            oldest_request = self.request_times[0]
+            elapsed = current_time - oldest_request
+            if elapsed < 1.0:
+                sleep_time = 1.0 - elapsed
+                logger.debug(f"⏳ Rate limiting: sleep {sleep_time:.2f}s")
+                time.sleep(sleep_time)
+        self.request_times.append(time.time())
+        
+        # Rate limiting: aspetta se necessario
+        current_time = time.time()
+        if len(self.request_times) == 10:
+            oldest_request = self.request_times[0]
+            elapsed = current_time - oldest_request
+            if elapsed < 1.0:
+                sleep_time = 1.0 - elapsed
+                logger.debug(f"⏳ Rate limiting: sleep {sleep_time:.2f}s")
+                time.sleep(sleep_time)
+        self.request_times.append(time.time())
+        
         if params is None:
             params = {}
         
@@ -167,7 +196,17 @@ class BinanceTestnetClient:
         
         try:
             response = self._make_request("POST", "/fapi/v1/order", params=params, signed=True)
-            logger.info(f"Ordine inviato: {side} {quantity} {symbol} @ {order_type}")
+            
+            # Verifica stato ordine
+            status = response.get("status", "UNKNOWN")
+            if status in ["NEW", "PARTIALLY_FILLED"]:
+                logger.info(f"⏳ Ordine {order_type} in stato {status}: {side} {quantity} {symbol}")
+            elif status == "FILLED":
+                logger.info(f"✅ Ordine eseguito: {side} {quantity} {symbol} @ {order_type}")
+            elif status in ["CANCELED", "REJECTED", "EXPIRED"]:
+                logger.error(f"❌ Ordine {status}: {side} {quantity} {symbol}")
+                return {"error": f"Ordine {status}", "response": response}
+            
             return response
         except Exception as e:
             logger.error(f"Errore invio ordine: {e}")

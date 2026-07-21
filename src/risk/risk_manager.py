@@ -14,7 +14,7 @@ class RiskManager:
     """Gestore rischio"""
     
     def __init__(self, risk_per_trade: float = 0.02, atr_period: int = 14, 
-                 atr_sl_multiplier: float = 2.0, rr_ratio: float = 2.0):
+                 atr_sl_multiplier: float = 1.5, rr_ratio: float = 2.0):
         """
         Inizializza risk manager
         
@@ -222,6 +222,62 @@ class RiskManager:
         logger.info(f"Take Profit calcolato: {take_profit:.2f} (RR: {self.rr_ratio}, Distance: {reward_distance:.2f})")
         return take_profit
     
+
+    def calculate_ladder_take_profits(self, entry_price: float, atr: float, side: str = "LONG", original_tp: float = None) -> dict:
+        """
+        Calcola 3 Take Profit scalati con R:R >= 2.0 garantito.
+        
+        Best practices per swing trading crypto:
+        - TP1: 2× SL distance (R:R 1:2) - Chiude 33% posizione
+        - TP2: 3× SL distance (R:R 1:3) - Chiude 33% posizione
+        - TP3: 4× SL distance (R:R 1:4) - Chiude 34% posizione
+        
+        Args:
+            entry_price: Prezzo di entry
+            atr: ATR corrente
+            side: LONG o SHORT
+            original_tp: TP originale (non usato, calcolato automaticamente)
+            
+        Returns:
+            Dizionario con tp1, tp2, tp3
+        """
+        # Validazione input
+        if atr <= 0 or entry_price <= 0:
+            logger.error(f"❌ Input invalidi: atr={atr}, entry_price={entry_price}")
+            return {'tp1': entry_price, 'tp2': entry_price, 'tp3': entry_price}
+        
+        # Calcola SL distance e TP multipli
+        sl_distance = atr * self.atr_sl_multiplier  # 1.5 × ATR
+        
+        if side == "LONG":
+            tp1 = entry_price + (sl_distance * 2)  # 2× SL distance = 3× ATR
+            tp2 = entry_price + (sl_distance * 3)  # 3× SL distance = 4.5× ATR
+            tp3 = entry_price + (sl_distance * 4)  # 4× SL distance = 6× ATR
+        else:  # SHORT
+            tp1 = entry_price - (sl_distance * 2)
+            tp2 = entry_price - (sl_distance * 3)
+            tp3 = entry_price - (sl_distance * 4)
+        
+        # Calcola R:R complessivo
+        risk_per_unit = sl_distance
+        reward_tp1 = (tp1 - entry_price) * 0.33 if side == "LONG" else (entry_price - tp1) * 0.33
+        reward_tp2 = (tp2 - entry_price) * 0.33 if side == "LONG" else (entry_price - tp2) * 0.33
+        reward_tp3 = (tp3 - entry_price) * 0.34 if side == "LONG" else (entry_price - tp3) * 0.34
+        total_reward = reward_tp1 + reward_tp2 + reward_tp3
+        rr_ratio = total_reward / risk_per_unit if risk_per_unit > 0 else 0
+        
+        logger.info(f"Ladder TP calcolati: TP1={tp1:.2f}, TP2={tp2:.2f}, TP3={tp3:.2f} (R:R={rr_ratio:.2f})")
+        
+        return {
+            'tp1': tp1,
+            'tp2': tp2,
+            'tp3': tp3,
+            'tp1_distance': sl_distance * 2,
+            'tp2_distance': sl_distance * 3,
+            'tp3_distance': sl_distance * 4,
+            'rr_ratio': rr_ratio
+        }
+
     def check_stop_loss_take_profit(self, position_side: str, entry_price: float, 
                                      stop_loss: float, take_profit: float, 
                                      current_price: float) -> Tuple[bool, str]:

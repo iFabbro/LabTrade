@@ -51,10 +51,14 @@ class ModuleMonitor:
         self.actions_count += 1
         self.is_active = True
         
-        # Determina stato e azione
+        # Determina stato e azione (con distinzione errori critici vs gestiti)
         if "error" in log_lower:
-            self.status = "ERRORE"
-            self.errors += 1
+            # Errori gestiti (retry, skip ciclo) non contano come critici
+            if any(x in log_lower for x in ["tentativo", "retry", "skip ciclo", "impossibile scaricare"]):
+                self.status = "ATTENZIONE"  # Giallo, non rosso
+            else:
+                self.status = "ERRORE"  # Solo errori veri
+                self.errors += 1
         elif "ordine" in log_lower or "order" in log_lower or "buy" in log_lower or "sell" in log_lower:
             self.status = "ESECUZIONE"
         elif "calcolo" in log_lower or "calculating" in log_lower or "sma" in log_lower or "atr" in log_lower:
@@ -80,6 +84,8 @@ class ModuleMonitor:
         """Restituisce il colore in base allo stato."""
         if "ERRORE" in self.status:
             return "red"
+        elif "ATTENZIONE" in self.status:
+            return "yellow"  # Errori gestiti
         elif "ATTIVO" in self.status or "ESECUZIONE" in self.status:
             return "green"
         elif "CALCOLO" in self.status:

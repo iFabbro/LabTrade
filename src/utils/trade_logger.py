@@ -73,16 +73,20 @@ class TradeLogger:
         
         self.trades.append(trade)
         
-        # Scrivi su CSV
-        with open(self.trades_file, "a", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow([
-                trade["timestamp"], trade["symbol"], trade["action"], trade["side"],
-                trade["price"], trade["quantity"], trade["pnl"], trade["commission"],
-                trade["balance"], trade["notes"]
-            ])
-        
-        logger.info(f"Trade loggato: {action} {side} {quantity} {symbol} @ {price}")
+        # ✅ FIX: Scrivi su CSV con gestione errori
+        try:
+            with open(self.trades_file, "a", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow([
+                    trade["timestamp"], trade["symbol"], trade["action"], trade["side"],
+                    trade["price"], trade["quantity"], trade["pnl"], trade["commission"],
+                    trade["balance"], trade["notes"]
+                ])
+            logger.info(f"Trade loggato: {action} {side} {quantity} {symbol} @ {price}")
+        except IOError as e:
+            logger.error(f"❌ Errore scrittura CSV: {e}")
+        except Exception as e:
+            logger.error(f"❌ Errore imprevisto scrittura trade: {e}")
     
     def get_statistics(self) -> Dict:
         """
@@ -131,14 +135,14 @@ class TradeLogger:
         print("\n" + "="*60)
         print("📊 TRADING SUMMARY")
         print("="*60)
-        print(f"Totale Trade: {stats['total_trades']}")
-        print(f"Trade Vincenti: {stats['winning_trades']}")
-        print(f"Trade Perdenti: {stats['losing_trades']}")
-        print(f"Win Rate: {stats['win_rate']:.2f}%")
-        print(f"PnL Totale: ${stats['total_pnl']:.2f}")
-        print(f"Commissioni: ${stats['total_commission']:.2f}")
-        print(f"PnL Netto: ${stats['net_pnl']:.2f}")
-        print(f"ROI: {stats['roi']:.2f}%")
-        print(f"Saldo Iniziale: ${stats['initial_balance']:.2f}")
-        print(f"Saldo Finale: ${stats['final_balance']:.2f}")
+        print(f"Totale Trade: {stats.get('total_trades', 0)}")
+        print(f"Trade Vincenti: {stats.get('winning_trades', 0)}")
+        print(f"Trade Perdenti: {stats.get('losing_trades', 0)}")
+        print(f"Win Rate: {stats.get('win_rate', 0.0):.2f}%")
+        print(f"PnL Totale: ${stats.get('total_pnl', 0.0):.2f}")
+        print(f"Commissioni: ${stats.get('total_commission', 0.0):.2f}")
+        print(f"PnL Netto: ${stats.get('net_pnl', 0.0):.2f}")
+        print(f"ROI: {stats.get('roi', 0.0):.2f}%")
+        print(f"Saldo Iniziale: ${stats.get('initial_balance', 0.0):.2f}")
+        print(f"Saldo Finale: ${stats.get('final_balance', 0.0):.2f}")
         print("="*60 + "\n")
