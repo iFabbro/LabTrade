@@ -27,3 +27,8 @@ python3 scripts/run_paper_trading.py --hours 24 --dry-run
 
 ## ️ Disclaimer
 Software a scopo educativo. Testare sempre in Paper Trading.
+
+## Interfaccia Utente
+
+![Dashboard](docs/dashboard_preview.png)
+![Mission Control](docs/mission_control_preview.png)
