@@ -32,3 +32,13 @@ Software a scopo educativo. Testare sempre in Paper Trading.
 
 ![Dashboard](docs/dashboard_preview.png)
 ![Mission Control](docs/mission_control_preview.png)
+
+## 📊 Performance Storiche (Backtest 6 Mesi - BTCUSDT 1h)
+| Metrica | Valore | Note |
+| :--- | :--- | :--- |
+| **Capitale Finale** | +1.11% | A partire da 10,000 USD |
+| **Win Rate** | 51.7% | Con R:R medio ≥ 2.0 |
+| **Max Drawdown** | **3.84%** | Risk management istituzionale attivo |
+| **Trade Totali** | 116 | ~19 trade/mese (no overtrading) |
+
+*Nota: I risultati sono ottenuti con leva massima 1x e rischio fisso del 2% per trade.*
