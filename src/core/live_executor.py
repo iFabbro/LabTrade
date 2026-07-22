@@ -774,12 +774,13 @@ class LiveExecutor:
             self._print_summary()
     
     def _graceful_shutdown(self):
-        """Shutdown graceful - chiudi posizioni aperte"""
+        """Shutdown graceful - SALVA posizioni aperte, NON chiuderle"""
         if self.position_open:
-            logger.info("🔄 Chiusura posizione aperta prima dello shutdown...")
-            latest_candle = self.fetch_latest_candle()
-            if latest_candle:
-                self._close_position(latest_candle['close'], "MANUAL_SHUTDOWN")
+            logger.info("💾 Salvataggio stato posizioni (NON chiudo posizioni aperte)...")
+            logger.info(f"✓ Posizione {self.position_side} salvata. Al riavvio continuerà ad essere monitorata.")
+            self.save_state()
+        else:
+            logger.info("✓ Nessuna posizione aperta da salvare.")
     
     def _print_summary(self):
         """Stampa summary finale"""
