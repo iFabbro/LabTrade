@@ -51,3 +51,19 @@ Un backtest "naive" che entra ed esce in 1 candela (senza Ladder TP) mostra un P
 1. **Fee Drag Reality:** Dimostra matematicamente che 116 trade × 0.08% (fee round-trip taker) = ~9.2% di erosione del capitale. Qualsiasi strategia a brevissimo termine su crypto viene distrutta dalle fee.
 2. **Validazione del Live Executor:** Questo fallimento del backtest semplificato *valida la necessità architetturale* del nostro Live Executor, che implementa **Ladder TP scalati** e hold time multi-candela. Solo catturando il trend completo (R:R ≥ 2.0) si può superare il fee drag e rendere la strategia profittevole.
 3. **Cross-Asset Consistency:** Il comportamento identico su BTCUSDT e ETHUSDT conferma che la logica dei filtri (ADX, Volume) è solida, e che il problema è puramente di *esecuzione*, non di segnale.
+
+---
+
+## 🛡️ Production Readiness & Engineering Standards
+Questo sistema è stato progettato e sottoposto ad audit rigorosi per garantire la massima affidabilità in ambiente di produzione. A differenza di script amatoriali, LabTrade implementa standard di ingegneria finanziaria robusti:
+
+- **Atomic State Persistence**: Lo stato della posizione viene salvato tramite scrittura atomica (`os.replace`), prevenendo la corruzione del file JSON in caso di crash improvviso del processo o blackout del sistema.
+- **Graceful Degradation**: All'avvio, il sistema valida l'integrità del file di stato. Se corrotto, il bot entra automaticamente in modalità sicura (reset dello stato) invece di crashare, garantendo la continuità operativa.
+- **Robustezza Matematica**: Validazione esplicita contro valori `NaN` e `Inf` nel calcolo del position size e dello Stop Loss, prevenendo ordini anomali durante flash crash o anomalie temporanee dei dati di mercato.
+- **Network Resilience**: Implementazione nativa di *Exponential Backoff* per gestire automaticamente i Rate Limit (HTTP 429) e gli errori temporanei del gateway (HTTP 50x) di Binance, senza bloccare il loop di esecuzione.
+- **Dependency Minimization**: `requirements.txt` ottimizzato con sole 5 dipendenze core, pronto per un deployment minimale, leggero e sicuro (es. container Docker o VPS).
+
+## 📈 Live Performance Tracking
+Il sistema è attualmente in esecuzione in modalità **Paper Trading (Dry-Run)** per raccogliere dati reali di mercato e validare l'expectancy della strategia rispetto al backtest storico.
+
+> 🔄 *Stato: Monitoraggio attivo. Le metriche live (Win Rate, PnL Netto, Slippage) verranno aggiornate in questa sezione al termine del ciclo di raccolta dati (24-48h).*
