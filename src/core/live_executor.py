@@ -378,7 +378,7 @@ class LiveExecutor:
             return "NEUTRAL"
 
     def save_state(self):
-        """Salva stato posizione su JSON."""
+        """Salva stato posizione su JSON con scrittura atomica (previene corruzione su crash)."""
         state = {
             "position_open": self.position_open,
             "position_side": self.position_side,
@@ -394,30 +394,50 @@ class LiveExecutor:
             "tp3_hit": getattr(self, 'tp3_hit', False),
             "remaining_quantity": getattr(self, 'remaining_quantity', self.position_quantity)
         }
-        with open(self.state_file, 'w') as f:
+        # Scrittura atomica: scrive su file temporaneo, poi rinomina. 
+        # Il rename è atomico a livello di OS: il file è integro o non esiste.
+        import os
+        temp_file = self.state_file.with_suffix('.tmp')
+        with open(temp_file, 'w') as f:
             json.dump(state, f)
+        os.replace(temp_file, self.state_file)
 
     def load_state(self):
-        """Carica stato posizione da JSON se esiste."""
+        """Carica stato posizione da JSON. Gestisce file corrotti per evitare crash all'avvio."""
         if self.state_file.exists():
-            with open(self.state_file, 'r') as f:
-                state = json.load(f)
-            self.position_open = state.get("position_open", False)
-            self.position_side = state.get("position_side")
-            self.entry_price = state.get("entry_price", 0.0)
-            self.stop_loss = state.get("stop_loss", 0.0)
-            self.take_profit = state.get("take_profit", 0.0)
-            self.position_quantity = state.get("position_quantity", 0.0)
-            self.tp1 = state.get("tp1", self.take_profit)
-            self.tp2 = state.get("tp2", self.take_profit)
-            self.tp3 = state.get("tp3", self.take_profit)
-            self.tp1_hit = state.get("tp1_hit", False)
-            self.tp2_hit = state.get("tp2_hit", False)
-            self.tp3_hit = state.get("tp3_hit", False)
-            self.remaining_quantity = state.get("remaining_quantity", self.position_quantity)
-            if self.position_open:
-                logger.info(f"🔄 Stato posizione ripristinato: {self.position_side} @ {self.entry_price}")
-                logger.info(f"   Ladder TP: TP1=${self.tp1:.2f}, TP2=${self.tp2:.2f}, TP3=${self.tp3:.2f}")
+            try:
+                with open(self.state_file, 'r') as f:
+                    state = json.load(f)
+                
+                self.position_open = state.get("position_open", False)
+                self.position_side = state.get("position_side")
+                self.entry_price = state.get("entry_price", 0.0)
+                self.stop_loss = state.get("stop_loss", 0.0)
+                self.take_profit = state.get("take_profit", 0.0)
+                self.position_quantity = state.get("position_quantity", 0.0)
+                self.tp1 = state.get("tp1", self.take_profit)
+                self.tp2 = state.get("tp2", self.take_profit)
+                self.tp3 = state.get("tp3", self.take_profit)
+                self.tp1_hit = state.get("tp1_hit", False)
+                self.tp2_hit = state.get("tp2_hit", False)
+                self.tp3_hit = state.get("tp3_hit", False)
+                self.remaining_quantity = state.get("remaining_quantity", self.position_quantity)
+                
+                if self.position_open:
+                    logger.info(f"🔄 Stato posizione ripristinato: {self.position_side} @ {self.entry_price}")
+                    logger.info(f"   Ladder TP: TP1=${self.tp1:.2f}, TP2=${self.tp2:.2f}, TP3=${self.tp3:.2f}")
+                    
+            except (json.JSONDecodeError, Exception) as e:
+                logger.critical(f"🚨 ERRORE CRITICO: File di stato corrotto ({e}).")
+                logger.critical("⚠️  Avvio in modalità sicura: nessuna posizione aperta. Controllo manuale richiesto.")
+                # Reset allo stato di default per permettere al bot di avviarsi
+                self.position_open = False
+                self.position_side = None
+                self.entry_price = 0.0
+                self.stop_loss = 0.0
+                self.take_profit = 0.0
+                self.position_quantity = 0.0
+                self.remaining_quantity = 0.0
 
     def _open_position(self, side: str, price: float, atr: float):
         """Apri posizione con Ladder TP automatico"""
@@ -446,8 +466,9 @@ class LiveExecutor:
         risk_amount = balance * 0.02  # 2% rischio
         stop_distance = abs(price - self.stop_loss)
         
-        if stop_distance == 0:
-            logger.error("❌ Stop distance zero, impossibile calcolare position size")
+        import math
+        if stop_distance == 0 or math.isnan(stop_distance) or math.isinf(stop_distance):
+            logger.error(f"❌ Stop distance invalida ({stop_distance}), impossibile calcolare position size. Skip ciclo.")
             return
         
         quantity = risk_amount / stop_distance
