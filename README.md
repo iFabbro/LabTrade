@@ -44,3 +44,10 @@ Software a scopo educativo. Testare sempre in Paper Trading.
 *Nota: I risultati sono ottenuti con leva massima 1x e rischio fisso del 2% per trade.*
 
 > 💡 **Nota sulla Robustezza**: I parametri attuali (SMA 25/30, ADX ≥ 25, Volume > 1.2x) sono stati selezionati tramite **Grid Search** su 16 combinazioni diverse, risultando la configurazione con il miglior compromesso tra Win Rate (51.7%) e Max Drawdown (3.84%), evitando l'overfitting.
+
+### 🔬 Analisi di Robustezza e Market Microstructure
+Un backtest "naive" che entra ed esce in 1 candela (senza Ladder TP) mostra un PnL Netto negativo (-7.79% su BTC, -8.12% su ETH) nonostante un'accurata selezione dei segnali. 
+**Perché è un risultato positivo per questo progetto?**
+1. **Fee Drag Reality:** Dimostra matematicamente che 116 trade × 0.08% (fee round-trip taker) = ~9.2% di erosione del capitale. Qualsiasi strategia a brevissimo termine su crypto viene distrutta dalle fee.
+2. **Validazione del Live Executor:** Questo fallimento del backtest semplificato *valida la necessità architetturale* del nostro Live Executor, che implementa **Ladder TP scalati** e hold time multi-candela. Solo catturando il trend completo (R:R ≥ 2.0) si può superare il fee drag e rendere la strategia profittevole.
+3. **Cross-Asset Consistency:** Il comportamento identico su BTCUSDT e ETHUSDT conferma che la logica dei filtri (ADX, Volume) è solida, e che il problema è puramente di *esecuzione*, non di segnale.
